@@ -14,6 +14,7 @@ TEST(TicTacToe, ValidMove8) {
 TEST(TicTacToe, ValidMove0) {
 	TicTacToe ttt("---------");
 	EXPECT_EQ(0, ttt.move('X'));
+	EXPECT_TRUE(false);
 }
 
 TEST(TicTacToe, ValidMoveNone) {
