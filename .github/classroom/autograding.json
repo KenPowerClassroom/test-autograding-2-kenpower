@@ -1,0 +1,14 @@
+{
+  "tests": [
+    {
+      "name": "test2",
+      "setup": "dir",
+      "run": "build.bat",
+      "input": "",
+      "output": "",
+      "comparison": "exact",
+      "timeout": 10,
+      "points": 42
+    }
+  ]
+}
