@@ -1,0 +1,93 @@
+name: GitHub Classroom Workflow
+
+on:
+  - push
+  - workflow_dispatch
+
+permissions:
+  checks: write
+  actions: read
+  contents: read
+  issues: read
+  pull-requests: write
+
+jobs:
+  build:
+    name: Autograding
+    runs-on: windows-latest
+    if: github.actor != 'github-classroom[bot]'
+    steps:
+    - uses: actions/checkout@v4
+    - name: Setup MSBuild and add to PATH
+      uses: microsoft/setup-msbuild@v1.1
+      id: setup_msbuild
+
+    - name: Setup VSTest and add to PATH
+      uses: darenm/Setup-VSTest@v1
+      id: setup_vstest
+
+    - name: Run tests
+      id: run-tests
+      shell: bash # test runner uses git bash shell in windows
+      run: |
+        nuget restore
+        nuget install GoogleTestAdapter
+        GTAdir=$(find -type d -name "GoogleTestAdapter*" -print -quit)
+        msbuild.exe -p:Configuration=Debug -p:Platform=x86
+        vstest.console.exe --Platform:x86 ./Debug/*.exe --TestAdapterPath:$GTAdir --Logger:trx  >> $GITHUB_STEP_SUMMARY || exit 0 
+        # sets the exit status to 0 regardless of what vtest returns. vtest exit is 1 if there are failed tests which prevents other steps running
+       
+
+    - name: Get Results
+      id: get-results
+      shell: bash
+      run: |
+        echo $(ls TestResults/*)
+        test_results_file=$(find . -wholename './TestResults/*.trx' | head -n 1)
+        if [[ -f "$test_results_file" ]]; then
+          counters=$(cat "$test_results_file" | grep -o '<Counters[^>].*\/>' |head -n 1)
+
+          passed_tests=$(echo $counters | grep -o 'passed="[0-9]*"'|grep -o '[0-9]*')
+          total_tests=$(echo $counters | grep -o 'total="[0-9]*"'|grep -o '[0-9]*')
+          echo "Passed tests"
+          echo $passed_tests
+          echo "passed_tests=$passed_tests"
+          echo "========="
+          
+          echo "PASSED_TESTS=$passed_tests" >> "$GITHUB_OUTPUT"
+          echo "TOTAL_TESTS=$total_tests" >> "$GITHUB_OUTPUT"
+          echo "TEST_RESULT_FILE=$test_results_file" >> "$GITHUB_OUTPUT"
+        fi
+    
+
+    - uses: markpatterson27/autograding@dev-points-input-release
+      with:
+        points: ${{ steps.get-results.outputs.PASSED_TESTS }}
+        available-points: ${{ steps.get-results.outputs.TOTAL_TESTS }}
+        
+    # - uses: education/autograding@v1
+    #   if: always()
+
+    - name: Publish Test Results
+      uses: EnricoMi/publish-unit-test-result-action/composite@v2
+      if: always()
+      with:
+        json_file: test_results.json
+        files: |
+          TestResults/**/*.xml
+          TestResults/**/*.trx
+          TestResults/**/*.json
+          
+    - name: Upload a file as an artifact
+      if: always()
+      uses: actions/upload-artifact@v2
+      with:
+        name: Test_Results
+        path: test_results.json
+
+    - name: Upload a file as an artifact
+      if: always()
+      uses: actions/upload-artifact@v2
+      with:
+        name: Test_Results_trx
+        path:  ${{ steps.get-results.outputs.TEST_RESULT_FILE }}
